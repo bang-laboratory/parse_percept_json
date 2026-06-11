@@ -1,0 +1,23 @@
+[project]
+name = "read-sensing"
+version = "0.1.0"
+description = "Read DBS sensing data files from Medtronic Percept"
+readme = "README.md"
+authors = [
+    { name = "Malte Lau Petersen", email = "maltelau@mlpetersen.dk" }
+]
+requires-python = ">=3.7"
+dependencies = [
+    "altair>=5.0.1",
+    "altair-viewer>=0.4.0",
+    "h5py>=3.8.0",
+    "ipympl>=0.9.3",
+    "ipython>=7.34.0",
+    "mne>=1.3.1",
+    "polars>=0.18.4",
+    "pyqt5>=5.15.10",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

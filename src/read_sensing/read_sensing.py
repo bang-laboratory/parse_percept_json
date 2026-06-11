@@ -379,15 +379,13 @@ def import_BrainSenseTimeDomain_df(filename: pathlib.Path) -> pl.DataFrame | Non
     lfddata_packet_sequences = _get_LfpData_sequences(json_data)
 
     if "BrainSenseTimeDomain" in json_data.keys():
-        dataframes = (
+        return pl.concat(
             _process_BrainSenseTimeDomainBlock(block, lfddata_packet_sequences)
             for block in json_data["BrainSenseTimeDomain"]
         )
 
-        return pl.concat(dataframes)
-
     else:
-        logger.warning("BrainSensTimeDomain not found")
+        logger.warning("BrainSenseTimeDomain not found")
         return None
 
 

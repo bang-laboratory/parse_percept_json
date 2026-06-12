@@ -333,11 +333,8 @@ def _process_BrainSenseTimeDomainBlock(
     # resumes. This could be helpful if the packets are dropped during
     # transport, but is probably not accurate if the packets are dropped due to
     # processing load on the implant.
-    data_frame = data_frame.with_columns(
-        pl.when(pl.col("GlobalPacketSizes").is_null())
-        .then(pl.col("GlobalPacketSizes").shift(2))
-        .otherwise(pl.col("GlobalPacketSizes"))
-        .alias("GlobalPacketSizesInterpolated")
+    data_frame = forward_fill_nulls_shifted(
+        data_frame, "GlobalPacketSizes", "GlobalPacketSizesInterpolated", 2
     )
 
     data_frame = _calc_BlockTimeMs(
@@ -350,6 +347,26 @@ def _process_BrainSenseTimeDomainBlock(
     )
 
     return data_frame
+
+
+def forward_fill_nulls_shifted(
+    data_frame: pl.DataFrame,
+    from_col: str = "GlobalPacketSizes",
+    to_col: str = "GlobalPacketSizesInterpolated",
+    shift: int = 2,
+) -> pl.DataFrame:
+    """combine functionality of forward_fill and shift(2)"""
+    prev_rows = tuple(None for _ in range(shift))
+    result = [None] * data_frame.height
+
+    for i, row in enumerate(data_frame.iter_rows(named=True)):
+        if row[from_col] is None and i >= shift:
+            result[i] = result[shift - 1]
+        else:
+            result[i] = row[from_col]
+        prev_rows = (row, *prev_rows[:-1])
+
+    return data_frame.with_columns(pl.Series(to_col, values=result, dtype=pl.Int64))
 
 
 def _get_LfpData_sequences(data: dict) -> Set | None:

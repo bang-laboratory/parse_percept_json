@@ -1,7 +1,7 @@
 [project]
-name = "read-sensing"
+name = "parse_percept_json"
 version = "0.1.0"
-description = "Read DBS sensing data files from Medtronic Percept"
+description = "Read DBS sensing data files from Medtronic Percept implant"
 readme = "README.md"
 authors = [
     { name = "Malte Lau Petersen", email = "maltelau@mlpetersen.dk" }

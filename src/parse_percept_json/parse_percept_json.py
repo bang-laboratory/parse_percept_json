@@ -7,13 +7,17 @@ import json
 import logging
 import pathlib
 from functools import cache
-from typing import Collection, Set
+from typing import Collection, Optional, Set
 
 import mne
 import polars as pl
 import polars.selectors as cs
 
 logger = logging.getLogger(__name__)
+
+"""
+TODO: rename module, don't use - and _
+"""
 
 
 def anonymize_file(file_path: pathlib.Path, prefix: str = "Sensitive_") -> pathlib.Path:
@@ -90,7 +94,7 @@ def convert_BrainSenseTimeDomain_to_mne(
         # .get_column("BlockTimeInterpolatedMs")
     )
 
-    print(missing_data_ms)
+    logger.debug(missing_data_ms)
 
     # because mne assumpes an unbroken timeline, we set missing data to value=0
     # and then set an Annotation for the period
@@ -110,14 +114,14 @@ def convert_BrainSenseTimeDomain_to_mne(
         # .explode("TimeDomainData")
     )
 
-    print(data)
+    logger.debug(data)
 
     annots = mne.Annotations(
         onset=missing_data_ms.get_column("onset") / 1000,
         duration=missing_data_ms.get_column("duration") / 1000,
         description=["Missing LFP packet"] * missing_data_ms.height,
     )
-    print(annots)
+    logger.info(annots)
     # annotate missing data in mne
 
     info = mne.create_info(ch_names=ch_names, ch_types=ch_types, sfreq=sfreq)
@@ -126,15 +130,16 @@ def convert_BrainSenseTimeDomain_to_mne(
     return raw
 
 
-def import_BrainSenseTimeDomain_to_mne(
-    filename: pathlib.Path,
-) -> mne.io.RawArray | None:
+def import_BrainSenseTimeDomain(filename: pathlib.Path) -> mne.io.RawArray | None:
+    """Read a .json file from a percept system, extract the BrainSenseTimeDomain
+    data as an mne raw array with missing data set to 0 and annotated as
+    missing.
+    """
     dataframe = import_BrainSenseTimeDomain_df(filename)
-    return (
-        convert_BrainSenseTimeDomain_to_mne(dataframe)
-        if dataframe is not None
-        else None
-    )
+    if dataframe is not None:
+        return convert_BrainSenseTimeDomain_to_mne(dataframe)
+    else:
+        return None
 
 
 def reformat_BrainSenseTimeDomain_channelname(BrainSenseTimeDomain, target="LFP"):

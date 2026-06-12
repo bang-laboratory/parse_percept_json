@@ -312,17 +312,18 @@ def _process_BrainSenseTimeDomainBlock(
     channels_found_this_block = (
         data_frame.unique("Channel").get_column("Channel").to_list()
     )
-    # print(channels_found_this_block)
-    full_sequence = pl.DataFrame(
-        {
-            "GlobalSequences": list(packets_missing),
-            "Channel": channels_found_this_block * len(packets_missing),
-        }
-    )
-    #  print(full_sequence)
-    data_frame = data_frame.join(
-        full_sequence, on=["GlobalSequences", "Channel"], how="full", coalesce=True
-    ).sort("GlobalSequences")
+    logger.debug(packets_missing)
+    if len(packets_missing) > 0:
+        full_sequence = pl.DataFrame(
+            {
+                "GlobalSequences": list(packets_missing),
+                "Channel": channels_found_this_block * len(packets_missing),
+            }
+        )
+        #  print(full_sequence)
+        data_frame = data_frame.join(
+            full_sequence, on=["GlobalSequences", "Channel"], how="full", coalesce=True
+        ).sort("GlobalSequences")
 
     # Empirically, the number of samples per packet stabilizes to a 2-long
     # repeating sequence, ie 62 63 62 63 for 250Hz BrainSenseTimedomain data.

@@ -46,13 +46,22 @@ def anonymize_data(data: dict) -> dict:
     # 3 layered dict of fields that should be blanked out
     for k1, v1 in {  # k,v for layer 1
         "PatientInformation": {
+            "Initial": [
+                "PatientLastName",
+                "PatientFirstName",
+                "PatientId",
+                "PatientDateOfBirth",
+                "PatientGender",
+                "Diagnosis",
+            ],
             "Final": [
                 "PatientLastName",
                 "PatientFirstName",
                 "PatientId",
                 "PatientDateOfBirth",
                 "PatientGender",
-            ]
+                "Diagnosis",
+            ],
         },
         "DeviceInformation": {"Final": ["NeurostimulatorSerialNumber"]},
     }.items():

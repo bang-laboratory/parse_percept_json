@@ -3,7 +3,9 @@
 import pathlib
 
 import polars as pl
+import polars.selectors as cs
 from src.parse_percept_json.parse_percept_json import (
+    _process_BrainSenseTimeDomainBlock,
     anonymize_data,
     convert_BrainSenseTimeDomain_to_mne,
     forward_fill_nulls_shifted,
@@ -46,11 +48,74 @@ def test_import_BrainSenseTimeDomain_df():
         "BlockTimeInterpolatedMs",
     }
 
-    assert data.explode("TimeDomainData").height == data.explode("BlockTimeMs").height
+    # assert data.explode("TimeDomainData").height == data.explode("BlockTimeMs").height
     assert (
         data.explode("TimeDomainData").height
         == data.explode("BlockTimeInterpolatedMs").height
     )
-    # sample_level = data.explode("TimeDomainData")
-    # assert sample_level.height == 29875
-    # assert not sample_level.select(pl.col("BlockTimeInterpolatedMs")) # TODO
+    sample_level = data.explode("TimeDomainData", "BlockTimeInterpolatedMs")
+    assert sample_level.height == 29875
+    # assert sum(sample_level[col] for col in sample_level.)
+
+    missing = data.filter(pl.col("GlobalPacketSizes").is_null())
+
+    assert missing.height > 0
+
+    for row in missing.iter_rows(named=True):
+        assert row["TimeDomainData"] is not None
+        assert len(row["TimeDomainData"]) == row["GlobalPacketSizesInterpolated"]
+        assert all(x is None for x in row["TimeDomainData"])
+
+
+def test_forward_fill_nulls_shifted_uses_two_back_value():
+    df = pl.DataFrame({"GlobalPacketSizes": [62, 63, None, None]})
+
+    result = forward_fill_nulls_shifted(df)
+
+    assert result["GlobalPacketSizesInterpolated"].to_list() == [
+        62,
+        63,
+        62,
+        63,
+    ]
+
+
+def test_no_missing_packets_no_null_samples():
+    json_data = read_file(pathlib.Path("tests/test_data_1.json"))
+    df = _process_BrainSenseTimeDomainBlock(json_data["BrainSenseTimeDomain"][0])
+
+    assert df.get_column("TimeDomainData").is_null().sum() == 0
+
+
+def test_sample_count_equals_interpolated_packet_sizes():
+    df = import_BrainSenseTimeDomain_df(pathlib.Path("tests/test_data_1.json"))
+
+    expected = df["GlobalPacketSizesInterpolated"].fill_null(0).sum()
+
+    observed = df.explode("TimeDomainData").height
+
+    assert observed == expected
+
+
+# def test_interpolated_timeline_has_no_jump():
+#     df = import_BrainSenseTimeDomain_df(pathlib.Path("tests/test_data_1.json"))
+
+#     times = (
+#         df.explode("BlockTimeInterpolatedMs")
+#         .sort("BlockTimeInterpolatedMs")
+#         .get_column("BlockTimeInterpolatedMs")
+#         .to_list()
+#     )
+
+#     diffs = [b - a for a, b in zip(times[:-1], times[1:])]
+
+
+def test_mne_length_matches_dataframe():
+    df = import_BrainSenseTimeDomain_df(pathlib.Path("tests/test_data_1.json"))
+    assert df is not None
+
+    raw = convert_BrainSenseTimeDomain_to_mne(df)
+
+    expected = df.explode("TimeDomainData").height
+
+    assert raw.n_times == expected

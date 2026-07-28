@@ -47,10 +47,10 @@ def test_import_BrainSenseTimeDomain_df():
     }
 
     assert data.explode("TimeDomainData").height == data.explode("BlockTimeMs").height
-    # assert (
-    #     data.explode("TimeDomainData").height
-    #     == data.explode("BlockTimeInterpolatedMs").height
-    # )
+    assert (
+        data.explode("TimeDomainData").height
+        == data.explode("BlockTimeInterpolatedMs").height
+    )
     # sample_level = data.explode("TimeDomainData")
     # assert sample_level.height == 29875
     # assert not sample_level.select(pl.col("BlockTimeInterpolatedMs")) # TODO

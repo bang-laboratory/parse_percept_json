@@ -358,6 +358,18 @@ def _process_BrainSenseTimeDomainBlock(
         data_frame, "GlobalPacketSizes", "GlobalPacketSizesInterpolated", 2
     )
 
+    data_frame = data_frame.with_columns(
+        pl.when(pl.col("TimeDomainData").is_null())
+        .then(
+            pl.col("GlobalPacketSizesInterpolated").map_elements(
+                lambda n: [None] * n,
+                return_dtype=pl.List(pl.Float64),
+            )
+        )
+        .otherwise(pl.col("TimeDomainData"))
+        .alias("TimeDomainData")
+    )
+
     data_frame = _calc_BlockTimeMs(
         data_frame,
         ms_per_sample,

@@ -7,7 +7,7 @@ import json
 import logging
 import pathlib
 from functools import cache
-from typing import Collection, Optional, Set
+from typing import Collection, Set
 
 import mne
 import polars as pl
@@ -15,8 +15,10 @@ import polars.selectors as cs
 
 logger = logging.getLogger(__name__)
 
+
 """
-TODO: rename module, don't use - and _
+TODO: GlobalSequences is a u16 can wrap around from 65535 to 0. How to handle this in detection of missing packets, detect negative sequences?
+test with line-meeg/unnumbered/Report_Json_Session_Report_20251028T170416.json
 """
 
 
@@ -40,6 +42,7 @@ def anonymize_data(data: dict) -> dict:
     """
     new = copy.deepcopy(data)
     del data
+    # 3 nested loops to rip through:
     # 3 layered dict of fields that should be blanked out
     for k1, v1 in {  # k,v for layer 1
         "PatientInformation": {
@@ -54,7 +57,7 @@ def anonymize_data(data: dict) -> dict:
         "DeviceInformation": {"Final": ["NeurostimulatorSerialNumber"]},
     }.items():
         for k2, v2 in v1.items():  # k,v for layer 2
-            for k3 in v2:  # v for layer 3 (it's just a list of keys)
+            for k3 in v2:  # k for layer 3 (it's just a list of keys)
                 new[k1][k2][k3] = ""
     return new
 
@@ -72,6 +75,13 @@ def read_file(filename: pathlib.Path, anonymize: bool = True) -> dict:
 def convert_BrainSenseTimeDomain_to_mne(
     dataframe: pl.DataFrame, ch_names=["LFPL02", "LFPR02"], sfreq=250, ch_types="eeg"
 ) -> mne.io.RawArray:
+    """Convert polars dataframe representation, which supports missing data as
+    polars "null" values into mne RawArray which crucially does NOT support
+    missing data directly. Instead, we interpolate with 0s and add an mne
+    Annotation to mark missing data.
+
+    # TODO: why is stuff commented out
+    """
 
     # ms_per_sample = 1 / sfreq * 1000
     start_time = dataframe.get_column("BlockTimeInterpolatedMs").explode().min()
@@ -116,13 +126,13 @@ def convert_BrainSenseTimeDomain_to_mne(
 
     logger.debug(data)
 
+    # annotate missing data in mne
     annots = mne.Annotations(
         onset=missing_data_ms.get_column("onset") / 1000,
         duration=missing_data_ms.get_column("duration") / 1000,
         description=["Missing LFP packet"] * missing_data_ms.height,
     )
     logger.info(annots)
-    # annotate missing data in mne
 
     info = mne.create_info(ch_names=ch_names, ch_types=ch_types, sfreq=sfreq)
     raw = mne.io.RawArray(data.transpose(), info)
@@ -182,7 +192,9 @@ def _calc_BlockTimeMs(
             int(start_time + x * ms_per_sample)
             for x in range(0, row[col_name_packet_size])
         ]
-        prev_row = row  # store pointer to previous row
+        prev_row = row  # store reference to previous row
+        # print(result[i], row[col_name_packet_size])
+        assert len(result[i]) == row[col_name_packet_size]
 
     return data_frame.with_columns(
         pl.Series(col_name_result, values=result, dtype=pl.List(pl.Int64))
@@ -207,7 +219,7 @@ def _process_BrainSenseTimeDomainBlock(
 
     """
 
-    # one long sequence of samples that has already been reconstructed from the packets
+    # one long sequence of samples that has already been reconstructed from the packets by the device
     # we index into it below to reconstruct timings using the packet-level data
     samples = pl.Series("sample", raw_data["TimeDomainData"])
     samples_per_ms = raw_data["SampleRateInHz"] / 1000

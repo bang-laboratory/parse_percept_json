@@ -382,7 +382,7 @@ def forward_fill_nulls_shifted(
 
     for i, row in enumerate(data_frame.iter_rows(named=True)):
         if row[from_col] is None and i >= shift:
-            result[i] = result[shift - 1]
+            result[i] = result[i - shift]
         else:
             result[i] = row[from_col]
         prev_rows = (row, *prev_rows[:-1])

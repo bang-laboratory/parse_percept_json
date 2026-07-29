@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import mne
+import numpy as np
 import polars as pl
 import pytest
 from src.parse_percept_json.parse_percept_json import (
@@ -100,3 +102,9 @@ if not sensitive_data_folder.exists():
 def test_load_all_lines_data():
     for f in sensitive_data_folder.glob("*_o*.json"):
         assert import_BrainSenseTimeDomain_df(f) is not None
+
+
+def test_import_BrainSenseTimeDomain():
+    data = import_BrainSenseTimeDomain(testfile)
+    assert type(data) is mne.io.RawArray
+    assert np.abs(data.duration - 2796.25) < 0.004  # 1 sample = 4 milisecond

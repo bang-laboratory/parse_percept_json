@@ -101,7 +101,7 @@ def convert_BrainSenseTimeDomain_to_mne(
     start_time = dataframe.get_column("BlockTimeInterpolatedMs").explode().min()
 
     missing_data_ms = (
-        dataframe.filter(pl.col("TimeDomainData").is_null())
+        dataframe.filter(pl.col("GlobalPacketSizes").is_null())
         .unique("BlockTimeInterpolatedMs")
         .explode("BlockTimeInterpolatedMs")
         .with_columns((pl.col("BlockTimeInterpolatedMs") - start_time).alias("onset"))
@@ -125,7 +125,7 @@ def convert_BrainSenseTimeDomain_to_mne(
     # and then set an Annotation for the period
     data = (
         dataframe.with_columns(
-            pl.when(pl.col("TimeDomainData").is_null())
+            pl.when(pl.col("GlobalPacketSizes").is_null())
             .then(
                 pl.col("GlobalPacketSizesInterpolated").map_elements(lambda n: [0] * n)
             )
@@ -338,6 +338,9 @@ def _process_BrainSenseTimeDomainBlock(
             # Missing packets
             for seq in range(1, delta):
                 packets_missing.add((prev + seq) % MODULO)
+        elif delta == 0:
+            logger.error(f"Duplicate packet detected: {curr}")
+            continue
         else:
             # delta > 32768
             logger.warning(

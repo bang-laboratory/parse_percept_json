@@ -95,7 +95,7 @@ def convert_BrainSenseTimeDomain_to_mne(
 
     if ch_names is None:
         # get channel names (and implicitly, count) from data
-        ch_names = dataframe.get_column("Channel").unique().to_list()
+        ch_names = sorted(dataframe.get_column("Channel").unique().to_list())
 
     # ms_per_sample = 1 / sfreq * 1000
     start_time = dataframe.get_column("BlockTimeInterpolatedMs").explode().min()

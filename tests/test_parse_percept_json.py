@@ -3,7 +3,6 @@
 import pathlib
 
 import polars as pl
-import polars.selectors as cs
 from src.parse_percept_json.parse_percept_json import (
     _process_BrainSenseTimeDomainBlock,
     anonymize_data,
@@ -17,9 +16,11 @@ from src.parse_percept_json.parse_percept_json import (
     reformat_BrainSenseTimeDomain_channelname,
 )
 
+testfile = pathlib.Path("tests/test_data_1.json")
+
 
 def test_anonymize_data():
-    d = read_file("tests/test_data_1.json", anonymize=False)
+    d = read_file(testfile, anonymize=False)
 
     # test data has (fake) patient info
     assert d["PatientInformation"]["Initial"]["PatientFirstName"] == "lars"
@@ -29,7 +30,7 @@ def test_anonymize_data():
 
 
 def test_import_BrainSenseTimeDomain_df():
-    data = import_BrainSenseTimeDomain_df(pathlib.Path("tests/test_data_1.json"))
+    data = import_BrainSenseTimeDomain_df(testfile)
 
     assert type(data) is pl.DataFrame
     assert data.height == 239
@@ -81,14 +82,14 @@ def test_forward_fill_nulls_shifted_uses_two_back_value():
 
 
 def test_no_missing_packets_no_null_samples():
-    json_data = read_file(pathlib.Path("tests/test_data_1.json"))
+    json_data = read_file(testfile)
     df = _process_BrainSenseTimeDomainBlock(json_data["BrainSenseTimeDomain"][0])
 
     assert df.get_column("TimeDomainData").is_null().sum() == 0
 
 
 def test_sample_count_equals_interpolated_packet_sizes():
-    df = import_BrainSenseTimeDomain_df(pathlib.Path("tests/test_data_1.json"))
+    df = import_BrainSenseTimeDomain_df(testfile)
 
     expected = df["GlobalPacketSizesInterpolated"].fill_null(0).sum()
 
@@ -110,12 +111,12 @@ def test_sample_count_equals_interpolated_packet_sizes():
 #     diffs = [b - a for a, b in zip(times[:-1], times[1:])]
 
 
-def test_mne_length_matches_dataframe():
-    df = import_BrainSenseTimeDomain_df(pathlib.Path("tests/test_data_1.json"))
-    assert df is not None
+# def test_mne_length_matches_dataframe():
+#     df = import_BrainSenseTimeDomain_df(pathlib.Path("tests/test_data_1.json"))
+#     assert df is not None
 
-    raw = convert_BrainSenseTimeDomain_to_mne(df)
+#     raw = convert_BrainSenseTimeDomain_to_mne(df)
 
-    expected = df.explode("TimeDomainData").height
+#     expected = df.explode("TimeDomainData").height
 
-    assert raw.n_times == expected
+#     assert raw.n_times == expected

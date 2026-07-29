@@ -27,11 +27,16 @@ def anonymize_file(file_path: pathlib.Path, prefix: str = "Sensitive_") -> pathl
     original file to {prefix}{file_path.name}
 
     """
-    new_file_path = file_path.parent / f"{prefix}{file_path.name}"
-    file_path.rename(new_file_path)
+    if not file_path.name.startswith("Sensitive_"):
+        new_file_path = file_path.parent / f"{prefix}{file_path.name}"
+        file_path.rename(new_file_path)
+    else:
+        new_file_path = file_path
     with open(new_file_path) as json_file:
-        with open(file_path, "w") as anonymized_file:
-            json.dump(anonymize_data(json.load(json_file)), anonymized_file)
+        sensitive_content = json.load(json_file)
+    with open(file_path, "w") as anonymized_file:
+        json.dump(anonymize_data(sensitive_content), anonymized_file)
+    del sensitive_content
     return file_path
 
 

@@ -7,7 +7,7 @@ import json
 import logging
 import pathlib
 from functools import cache
-from typing import Collection, Set
+from typing import Collection, Optional, Set
 
 import mne
 import polars as pl
@@ -87,15 +87,20 @@ def read_file(filename: pathlib.Path, anonymize: bool = True) -> dict:
 
 
 def convert_BrainSenseTimeDomain_to_mne(
-    dataframe: pl.DataFrame, ch_names=["LFPL02", "LFPR02"], sfreq=250, ch_types="eeg"
+    dataframe: pl.DataFrame,
+    ch_names: Optional[list[str]] = None,
+    sfreq: float = 250,
+    ch_types: str = "eeg",
 ) -> mne.io.RawArray:
     """Convert polars dataframe representation, which supports missing data as
     polars "null" values into mne RawArray which crucially does NOT support
     missing data directly. Instead, we interpolate with 0s and add an mne
     Annotation to mark missing data.
-
-    # TODO: why is stuff commented out
     """
+
+    if ch_names is None:
+        # get channel names (and implicitly, count) from data
+        ch_names = dataframe.get_column("Channel").unique().to_list()
 
     # ms_per_sample = 1 / sfreq * 1000
     start_time = dataframe.get_column("BlockTimeInterpolatedMs").explode().min()

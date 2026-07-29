@@ -97,7 +97,7 @@ def convert_BrainSenseTimeDomain_to_mne(
         # get channel names (and implicitly, count) from data
         ch_names = sorted(dataframe.get_column("Channel").unique().to_list())
 
-    # ms_per_sample = 1 / sfreq * 1000
+    ms_per_sample = 1000 / sfreq
     start_time = dataframe.get_column("BlockTimeInterpolatedMs").explode().min()
 
     missing_data_ms = (
@@ -109,6 +109,7 @@ def convert_BrainSenseTimeDomain_to_mne(
             (
                 pl.col("BlockTimeInterpolatedMs").max()
                 - pl.col("BlockTimeInterpolatedMs").min()
+                + ms_per_sample
             )
             .over("GlobalSequences", "Channel")
             .alias("duration")
@@ -149,6 +150,11 @@ def convert_BrainSenseTimeDomain_to_mne(
     logger.info(annots)
 
     info = mne.create_info(ch_names=ch_names, ch_types=ch_types, sfreq=sfreq)
+    info["description"] = (
+        "Missing packets replaced with 0. "
+        "Consult annotations labelled "
+        "'Missing LFP packet'."
+    )
     raw = mne.io.RawArray(data.transpose(), info)
     raw.set_annotations(annots)
     return raw

@@ -120,3 +120,44 @@ def test_sample_count_equals_interpolated_packet_sizes():
 #     expected = df.explode("TimeDomainData").height
 
 #     assert raw.n_times == expected
+
+
+def test_missing_packets_contribute_expected_interpolated_samples():
+    df = import_BrainSenseTimeDomain_df(testfile)
+    assert df is not None
+
+    missing_packets = df.filter(pl.col("GlobalPacketSizes").is_null())
+
+    # Sanity check: fixture should contain at least one missing packet
+    assert missing_packets.height > 0
+
+    expected_missing_samples = (
+        missing_packets["GlobalPacketSizesInterpolated"].fill_null(0).sum()
+    )
+
+    observed_missing_samples = (
+        missing_packets.explode("TimeDomainData")
+        .filter(pl.col("TimeDomainData").is_null())
+        .height
+    )
+
+    assert observed_missing_samples == expected_missing_samples
+
+
+def test_detected_missing_packets_match_interpolated_samples():
+    df = import_BrainSenseTimeDomain_df(testfile)
+    assert df is not None
+
+    missing_rows = df.filter(pl.col("GlobalPacketSizes").is_null())
+
+    packet_count = missing_rows.height
+
+    packet_sizes = missing_rows["GlobalPacketSizesInterpolated"].fill_null(0).to_list()
+
+    inserted_samples = (
+        missing_rows.explode("TimeDomainData")
+        .filter(pl.col("TimeDomainData").is_null())
+        .height
+    )
+
+    assert inserted_samples == sum(packet_sizes)

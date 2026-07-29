@@ -407,7 +407,7 @@ def forward_fill_nulls_shifted(
     return data_frame.with_columns(pl.Series(to_col, values=result, dtype=pl.Int64))
 
 
-def _get_LfpData_sequences(data: dict) -> Set | None:
+def _get_LfpData_sequences(data: dict, filename) -> Set | None:
     """Extract the packet sequence numbers from the BrainSenseLfp -> LfpData
     part of the data. These packets contain the 2hz data stream showed on the
     tablet, and the sequence numbers are interleaved with the packet sequence
@@ -430,14 +430,14 @@ def _get_LfpData_sequences(data: dict) -> Set | None:
         )
 
     else:
-        logger.warning("LfpData not found")
+        logger.warning(f"LfpData not found for {filename}")
         return None
 
 
 def import_BrainSenseTimeDomain_df(filename: pathlib.Path) -> pl.DataFrame | None:
     """Extract the BrainSenseTimeDomain data from a percept json file"""
     json_data = read_file(filename)
-    lfddata_packet_sequences = _get_LfpData_sequences(json_data)
+    lfddata_packet_sequences = _get_LfpData_sequences(json_data, filename.name)
 
     if "BrainSenseTimeDomain" in json_data.keys():
         return pl.concat(
@@ -446,7 +446,7 @@ def import_BrainSenseTimeDomain_df(filename: pathlib.Path) -> pl.DataFrame | Non
         )
 
     else:
-        logger.warning("BrainSenseTimeDomain not found")
+        logger.warning(f"BrainSenseTimeDomain not found for {filename.name}")
         return None
 
 

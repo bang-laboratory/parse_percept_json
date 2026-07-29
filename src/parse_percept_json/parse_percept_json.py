@@ -17,12 +17,6 @@ import polars.selectors as cs
 logger = logging.getLogger(__name__)
 
 
-"""
-TODO: GlobalSequences is a u16 can wrap around from 65535 to 0. How to handle this in detection of missing packets, detect negative sequences?
-test with line-meeg/unnumbered/Report_Json_Session_Report_20251028T170416.json
-"""
-
-
 def anonymize_file(file_path: pathlib.Path, prefix: str = "Sensitive_") -> pathlib.Path:
     """Creates a copy of the file with sensitive data removed, and moves the
     original file to {prefix}{file_path.name}
@@ -322,21 +316,37 @@ def _process_BrainSenseTimeDomainBlock(
     )
 
     # Check for missing packets
-    packets_found = set(data_frame["GlobalSequences"])
-    packets_implied = set(
-        range(
-            data_frame["GlobalSequences"].min(),  # ty: ignore[invalid-argument-type]
-            1 + data_frame["GlobalSequences"].max(),  # ty: ignore[unsupported-operator]
-        )
-    )
-    packets_missing = packets_implied - (packets_found | known_accounted_for_packets)
+    packets_found: set[int] = set(data_frame["GlobalSequences"])
+
+    MODULO = 2**16  # GlobalSequences is a 16 bit integer
+    HALF_RANGE = MODULO // 2
+    packets_missing: set[int] = set()
+    sequence_list = data_frame["GlobalSequences"].to_list()
+    for prev, curr in zip(sequence_list[:-1], sequence_list[1:]):
+        delta = (curr - prev) % MODULO  # handle integer overflows in GlobalSequence
+
+        if delta == 1:
+            continue
+
+        if 1 < delta <= HALF_RANGE:
+            # Missing packets
+            for seq in range(1, delta):
+                packets_missing.add((prev + seq) % MODULO)
+        else:
+            # delta > 32768
+            logger.warning(
+                f"Ignoring backwards sequence jump: prev={prev}, curr={curr}, delta={delta}"
+            )
+
+    packets_missing -= known_accounted_for_packets
+
     if len(packets_missing) == 0:
         logger.info(
-            f"Missing Packets ({len(packets_missing)}/{len(packets_implied)}): {sorted(packets_missing)}"
+            f"Missing Packets ({len(packets_missing)}): {sorted(packets_missing)}"
         )
     else:
         logger.warning(
-            f"Missing Packets ({len(packets_missing)}/{len(packets_implied)}): {sorted(packets_missing)}"
+            f"Missing Packets ({len(packets_missing)}): {sorted(packets_missing)}"
         )
 
     # explicitly represent missing packets as null rows (polars missingness)

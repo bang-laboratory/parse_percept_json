@@ -19,12 +19,17 @@ import parse_percept_json
 data_path = Path("file.json")
 
 # For BrainSenseTimeDomain data
-df = import_BrainSenseTimeDomain_df(data_path)
-raw = convert_BrainSenseTimeDomain_to_mne(df)
+df = import_BrainSenseTimeDomain_df(data_path) # polars dataframe with missing data as null
+raw = convert_BrainSenseTimeDomain_to_mne(df) # mne RawArray with missing data as 0 and Annotated
 
 # Also supports other data streams available in the json format:
 df2 = import_LfpTrendLogs(data_path)
 df3 = import_LfpFrequencySnapshotEvents(data_path)
 ```
 
-`
+## Install
+In an uv-managed project, do:
+``` bash
+uv add "parse_percept_json @ git+https://github.com/bang-laboratory/parse_percept_json"
+```
+

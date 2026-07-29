@@ -9,6 +9,7 @@ import pathlib
 from functools import cache
 from typing import Collection, Optional, Set
 
+import matplotlib.pyplot as plt
 import mne
 import polars as pl
 import polars.selectors as cs
@@ -507,11 +508,18 @@ def import_LfpFrequencySnapshotEvents(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test parsing DBS sensing data")
     parser.add_argument(
-        "sensitive_test_file_path", help="Path to json data file", type=pathlib.Path
+        "--sensitive_test_file_path",
+        help="Path to json data file",
+        type=pathlib.Path,
+        default=pathlib.Path("tests/test_data_1.json"),
     )
     args = parser.parse_args()
 
     test_file_path = anonymize_file(args.sensitive_test_file_path)
     json_data = read_file(test_file_path)
     brainsense_df_data = import_BrainSenseTimeDomain_df(test_file_path)
-    print(brainsense_df_data)
+    assert brainsense_df_data is not None
+    mne_data = convert_BrainSenseTimeDomain_to_mne(brainsense_df_data)
+    fig = mne_data.plot(scalings="auto")
+    plt.show(block=True)
+    # fig.show()

@@ -198,11 +198,10 @@ def _calc_BlockTimeMs(
     previous row.
 
     """
-    prev_row = None
     result = [None] * data_frame.height
 
     for i, row in enumerate(data_frame.iter_rows(named=True)):
-        if prev_row is None:
+        if i == 0:
             # first packet in block
             start_time = row[col_name_timestamp_start]
         else:
@@ -212,7 +211,6 @@ def _calc_BlockTimeMs(
             int(start_time + x * ms_per_sample)
             for x in range(0, row[col_name_packet_size])
         ]
-        prev_row = row  # store reference to previous row
         # print(result[i], row[col_name_packet_size])
         assert len(result[i]) == row[col_name_packet_size]
 
@@ -350,9 +348,7 @@ def _process_BrainSenseTimeDomainBlock(
     packets_missing -= known_accounted_for_packets
 
     if len(packets_missing) == 0:
-        logger.info(
-            f"Missing Packets ({len(packets_missing)}): {sorted(packets_missing)}"
-        )
+        logger.info(f"Missing Packets: 0")
     else:
         logger.warning(
             f"Missing Packets ({len(packets_missing)}): {sorted(packets_missing)}"
@@ -419,7 +415,6 @@ def forward_fill_nulls_shifted(
     shift: int = 2,
 ) -> pl.DataFrame:
     """combine functionality of forward_fill and shift(2)"""
-    prev_rows = tuple(None for _ in range(shift))
     result = [None] * data_frame.height
 
     for i, row in enumerate(data_frame.iter_rows(named=True)):
@@ -427,7 +422,6 @@ def forward_fill_nulls_shifted(
             result[i] = result[i - shift]
         else:
             result[i] = row[from_col]
-        prev_rows = (row, *prev_rows[:-1])
 
     return data_frame.with_columns(pl.Series(to_col, values=result, dtype=pl.Int64))
 

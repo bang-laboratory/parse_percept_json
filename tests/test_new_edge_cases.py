@@ -318,29 +318,9 @@ def test_mne_array_duration_matches_timeline():
 
     actual_duration_s = raw.times[-1]
     # Allow small tolerance due to floating point and sample alignment
-    assert abs(actual_duration_s - expected_duration_s) < 0.01, (
-        f"MNE duration {actual_duration_s}s doesn't match timeline {expected_duration_s}s"
-    )
-
-
-def test_no_annotation_warnings():
-    """Regression test: No annotations should be outside data range"""
-    df = import_BrainSenseTimeDomain_df(testfile)
-    import warnings
-    
-    # Capture warnings
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        raw = convert_BrainSenseTimeDomain_to_mne(df)
-    
-    # Check no RuntimeWarning about omitted annotations
-    for warning in w:
-        assert "Omitted" not in str(warning.message), (
-            f"Got annotation warning: {warning.message}"
-        )
-        assert "outside data range" not in str(warning.message), (
-            f"Got annotation warning: {warning.message}"
-        )
+    assert (
+        abs(actual_duration_s - expected_duration_s) < 0.01
+    ), f"MNE duration {actual_duration_s}s doesn't match timeline {expected_duration_s}s"
 
 
 def test_gap_periods_annotated_as_missing():

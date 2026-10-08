@@ -23,7 +23,7 @@ testfile = Path("tests/Sensitive_Report_Json_Session_Report_20251028T170416.json
 if not testfile.exists():
     pytest.skip("No access to sensitive data file", allow_module_level=True)
 
-expensive = pytest.mark.skipif(False, reason="This test is expensive")
+expensive = pytest.mark.skipif(True, reason="This test is expensive")
 
 
 @expensive

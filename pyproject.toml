@@ -1,6 +1,6 @@
 [project]
 name = "parse_percept_json"
-version = "0.1.2"
+version = "0.1.3"
 description = "Read DBS sensing data files from Medtronic Percept implant"
 readme = "README.md"
 authors = [

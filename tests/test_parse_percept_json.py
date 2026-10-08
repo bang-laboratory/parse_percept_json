@@ -47,6 +47,7 @@ def test_import_BrainSenseTimeDomain_df():
         "BlockTimeMs",
         "GlobalPacketSizesInterpolated",
         "BlockTimeInterpolatedMs",
+        "block_id",
     }
 
     # assert data.explode("TimeDomainData").height == data.explode("BlockTimeMs").height

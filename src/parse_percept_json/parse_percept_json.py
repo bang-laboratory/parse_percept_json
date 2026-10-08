@@ -220,7 +220,9 @@ def _calc_BlockTimeMs(
 
 
 def _process_BrainSenseTimeDomainBlock(
-    raw_data: dict, known_accounted_for_packets: Collection[int] | None = None
+    raw_data: dict,
+    known_accounted_for_packets: Collection[int] | None = None,
+    block_id: int = 0,
 ) -> pl.DataFrame:
     """These data files can contain multiple blocks that are not guaranteed to
     be continuous
@@ -405,7 +407,8 @@ def _process_BrainSenseTimeDomainBlock(
         "GlobalPacketSizesInterpolated",
     )
 
-    return data_frame
+    # Add block_id to the dataframe before returning
+    return data_frame.with_columns(pl.lit(block_id).alias("block_id"))
 
 
 def forward_fill_nulls_shifted(
@@ -460,8 +463,10 @@ def import_BrainSenseTimeDomain_df(filename: pathlib.Path) -> pl.DataFrame | Non
 
     if "BrainSenseTimeDomain" in json_data.keys():
         return pl.concat(
-            _process_BrainSenseTimeDomainBlock(block, lfddata_packet_sequences)
-            for block in json_data["BrainSenseTimeDomain"]
+            _process_BrainSenseTimeDomainBlock(
+                block, lfddata_packet_sequences, block_id=i
+            )
+            for i, block in enumerate(json_data["BrainSenseTimeDomain"])
         )
 
     else:

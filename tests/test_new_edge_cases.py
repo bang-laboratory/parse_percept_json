@@ -292,13 +292,13 @@ def test_mne_array_spans_full_timeline():
     """Regression test: MNE array should span the full timeline implied by BlockTimeInterpolatedMs"""
     df = import_BrainSenseTimeDomain_df(testfile)
     raw = convert_BrainSenseTimeDomain_to_mne(df)
-    
+
     # Calculate expected duration from BlockTimeInterpolatedMs
     min_time = df["BlockTimeInterpolatedMs"].explode().min()
     max_time = df["BlockTimeInterpolatedMs"].explode().max()
     expected_duration_ms = max_time - min_time
     expected_samples = int(expected_duration_ms / 4 + 1)  # 4ms per sample at 250Hz
-    
+
     actual_samples = raw.get_data().shape[1]
     assert actual_samples == expected_samples, (
         f"MNE array has {actual_samples} samples, expected {expected_samples} "
@@ -310,12 +310,12 @@ def test_mne_array_duration_matches_timeline():
     """Regression test: MNE array duration should match timeline span"""
     df = import_BrainSenseTimeDomain_df(testfile)
     raw = convert_BrainSenseTimeDomain_to_mne(df)
-    
+
     # Calculate expected duration from BlockTimeInterpolatedMs
     min_time = df["BlockTimeInterpolatedMs"].explode().min()
     max_time = df["BlockTimeInterpolatedMs"].explode().max()
     expected_duration_s = (max_time - min_time) / 1000.0
-    
+
     actual_duration_s = raw.times[-1]
     # Allow small tolerance due to floating point and sample alignment
     assert abs(actual_duration_s - expected_duration_s) < 0.01, (
@@ -347,10 +347,10 @@ def test_gap_periods_annotated_as_missing():
     """Regression test: Gap periods between blocks should be annotated as missing"""
     df = import_BrainSenseTimeDomain_df(testfile)
     raw = convert_BrainSenseTimeDomain_to_mne(df)
-    
+
     # Get the start time of the timeline
     min_time = df["BlockTimeInterpolatedMs"].explode().min()
-    
+
     # Get gap info from dataframe
     block_boundaries = (
         df.group_by("block_id")
@@ -360,33 +360,37 @@ def test_gap_periods_annotated_as_missing():
         )
         .sort("block_start")
     )
-    
+
     # Calculate expected gaps (in relative seconds from timeline start)
     expected_gaps = []
     block_starts = block_boundaries["block_start"].to_list()
     block_ends = block_boundaries["block_end"].to_list()
     for i in range(len(block_starts) - 1):
         gap_start_ms = block_ends[i] + 4
-        gap_end_ms = block_starts[i+1] - 4
+        gap_end_ms = block_starts[i + 1] - 4
         if gap_end_ms > gap_start_ms:
-            expected_gaps.append({
-                "start_s": (gap_start_ms - min_time) / 1000.0,
-                "duration_s": (gap_end_ms - gap_start_ms + 4) / 1000.0,
-            })
-    
+            expected_gaps.append(
+                {
+                    "start_s": (gap_start_ms - min_time) / 1000.0,
+                    "duration_s": (gap_end_ms - gap_start_ms + 4) / 1000.0,
+                }
+            )
+
     # Check annotations cover gap periods
     # Note: missing packets within blocks are also annotated
     # We just verify that gap periods are covered
     assert len(raw.annotations) > 0, "Should have at least some annotations"
-    
+
     # Get all annotated time ranges
     annotated_ranges = []
     for annot in raw.annotations:
-        annotated_ranges.append({
-            "start": annot["onset"],
-            "end": annot["onset"] + annot["duration"],
-        })
-    
+        annotated_ranges.append(
+            {
+                "start": annot["onset"],
+                "end": annot["onset"] + annot["duration"],
+            }
+        )
+
     # For each expected gap, check it's covered by at least one annotation
     for gap in expected_gaps:
         gap_covered = False
@@ -394,19 +398,19 @@ def test_gap_periods_annotated_as_missing():
             if ar["start"] <= gap["start_s"] and ar["end"] >= gap["start_s"]:
                 gap_covered = True
                 break
-        assert gap_covered, (
-            f"Gap at {gap['start_s']}s (duration {gap['duration_s']}s) not covered by any annotation"
-        )
+        assert (
+            gap_covered
+        ), f"Gap at {gap['start_s']}s (duration {gap['duration_s']}s) not covered by any annotation"
 
 
 def test_all_channels_have_equal_samples():
     """Regression test: All channels should have equal number of samples in MNE array"""
     df = import_BrainSenseTimeDomain_df(testfile)
     raw = convert_BrainSenseTimeDomain_to_mne(df)
-    
+
     data = raw.get_data()
     # All rows (channels) should have the same number of columns (samples)
     for i in range(len(data)):
-        assert data.shape[1] == raw.n_times, (
-            f"Channel {i} has {data.shape[1]} samples, expected {raw.n_times}"
-        )
+        assert (
+            data.shape[1] == raw.n_times
+        ), f"Channel {i} has {data.shape[1]} samples, expected {raw.n_times}"

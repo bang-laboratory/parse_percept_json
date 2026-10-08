@@ -201,7 +201,6 @@ def test_sequence_number_modulo_handling():
 
 def test_lfp_data_sequences_excluded_from_missing():
     """Verify LfpData sequences are not flagged as missing in BrainSenseTimeDomain"""
-    import json
 
     df = import_BrainSenseTimeDomain_df(testfile)
     # Get LfpData sequences from the JSON

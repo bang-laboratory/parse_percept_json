@@ -107,8 +107,6 @@ def convert_BrainSenseTimeDomain_to_mne(
         .agg(
             pl.col("BlockTimeInterpolatedMs").explode().min().alias("block_start"),
             pl.col("BlockTimeInterpolatedMs").explode().max().alias("block_end"),
-            pl.col("Channel").first().alias("channel"),
-            pl.col("Gain").first().alias("gain"),
         )
         .sort("block_start")
     )
@@ -116,8 +114,6 @@ def convert_BrainSenseTimeDomain_to_mne(
     # Calculate gaps between consecutive blocks - need separate steps for polars
     gap_info = block_boundaries.with_columns(
         prev_end=pl.col("block_end").shift(1),
-        prev_channel=pl.col("channel").shift(1),
-        prev_gain=pl.col("gain").shift(1),
     )
     gap_info = gap_info.filter(pl.col("block_start") > pl.col("prev_end") + 4)
     gap_info = gap_info.with_columns(
@@ -129,28 +125,30 @@ def convert_BrainSenseTimeDomain_to_mne(
     gap_info = gap_info.with_columns(
         gap_samples=((pl.col("gap_end") - pl.col("gap_start")) / 4 + 1).cast(pl.Int64),
     )
-    gap_info = gap_info.select("prev_channel", "prev_gain", "gap_start", "gap_end", "gap_samples")
+    gap_info = gap_info.select("gap_start", "gap_end", "gap_samples")
 
-    # Create gap rows with unique GlobalSequences
+    # Create gap rows for ALL channels to ensure equal sample counts
     # TimeDomainData will be None, and the existing code will fill it with zeros
+    all_channels = dataframe.get_column("Channel").unique().to_list()
     gap_rows = []
-    for i, row in enumerate(gap_info.iter_rows(named=True)):
+    for gap_idx, row in enumerate(gap_info.iter_rows(named=True)):
         gap_times = list(range(row["gap_start"], row["gap_end"] + 1, 4))
-        gap_rows.append({
-            "GlobalSequences": -10000 - i,  # Unique negative sequence numbers
-            "GlobalPacketSizes": None,
-            "TicksInMses": None,
-            "Channel": row["prev_channel"],
-            "Gain": int(row["prev_gain"]),
-            "FirstPacketDateTime": None,
-            "PacketStartIndex": None,
-            "TimeDomainData": None,
-            "PacketTimeMs": None,
-            "BlockTimeMs": None,
-            "GlobalPacketSizesInterpolated": int(row["gap_samples"]),
-            "BlockTimeInterpolatedMs": gap_times,
-            "block_id": None,
-        })
+        for ch_idx, channel in enumerate(all_channels):
+            gap_rows.append({
+                "GlobalSequences": -10000 - gap_idx * 100 - ch_idx,  # Unique negative sequence numbers
+                "GlobalPacketSizes": None,
+                "TicksInMses": None,
+                "Channel": channel,
+                "Gain": None,
+                "FirstPacketDateTime": None,
+                "PacketStartIndex": None,
+                "TimeDomainData": None,
+                "PacketTimeMs": None,
+                "BlockTimeMs": None,
+                "GlobalPacketSizesInterpolated": int(row["gap_samples"]),
+                "BlockTimeInterpolatedMs": gap_times,
+                "block_id": None,
+            })
 
     if gap_rows:
         gap_df = pl.DataFrame(gap_rows)

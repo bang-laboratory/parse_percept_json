@@ -105,7 +105,10 @@ def test_load_all_lines_data():
         assert import_BrainSenseTimeDomain_df(f) is not None
 
 
+@expensive
 def test_import_BrainSenseTimeDomain():
     data = import_BrainSenseTimeDomain(testfile)
-    assert type(data) is mne.io.RawArray
-    assert np.abs(data.duration - 2796.25) < 0.004  # 1 sample = 4 milisecond
+    assert type(data) is mne.io.RawArray, "should return an mne RawArray"
+    assert (
+        np.abs(data.duration - 2796.25) < 0.004
+    ), "should find the correct number of samples"  # 1 sample = 4 milisecond

@@ -18,9 +18,14 @@ from src.parse_percept_json.parse_percept_json import (
     reformat_BrainSenseTimeDomain_channelname,
 )
 
-testfile = Path("tests/test_data_1.json")
+testfiles = [
+    Path("tests/test_data_1.json"),
+    Path("tests/Report_Json_Session_Report_20250218T092621.json"),
+    Path("tests/Report_Json_Session_Report_20250226T084029.json"),
+]
 
 
 def test_import_BrainSenseTimeDomain():
-    data = import_BrainSenseTimeDomain(testfile)
-    assert type(data) is mne.io.RawArray
+    for testfile in testfiles:
+        data = import_BrainSenseTimeDomain(testfile)
+        assert type(data) is mne.io.RawArray

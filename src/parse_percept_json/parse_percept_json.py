@@ -101,19 +101,21 @@ def convert_BrainSenseTimeDomain_to_mne(
     start_time = dataframe.get_column("BlockTimeInterpolatedMs").explode().min()
 
     # Identify and add gap rows for missing time between blocks
-    # Get block boundaries sorted by time
-    block_boundaries = (
-        dataframe.group_by("block_id")
+    # Different channels can have the same block_id but different data,
+    # so gap detection must be done independently for each channel
+    # Get per-channel block boundaries sorted by time
+    channel_block_boundaries = (
+        dataframe.group_by(["Channel", "block_id"])
         .agg(
             pl.col("BlockTimeInterpolatedMs").explode().min().alias("block_start"),
             pl.col("BlockTimeInterpolatedMs").explode().max().alias("block_end"),
         )
-        .sort("block_start")
+        .sort(["Channel", "block_start"])
     )
 
-    # Calculate gaps between consecutive blocks - need separate steps for polars
-    gap_info = block_boundaries.with_columns(
-        prev_end=pl.col("block_end").shift(1),
+    # Calculate gaps between consecutive blocks per channel - need separate steps for polars
+    gap_info = channel_block_boundaries.with_columns(
+        prev_end=pl.col("block_end").shift(1).over("Channel"),
     )
     gap_info = gap_info.filter(pl.col("block_start") > pl.col("prev_end") + 4)
     gap_info = gap_info.with_columns(
@@ -125,30 +127,30 @@ def convert_BrainSenseTimeDomain_to_mne(
     gap_info = gap_info.with_columns(
         gap_samples=((pl.col("gap_end") - pl.col("gap_start")) / 4 + 1).cast(pl.Int64),
     )
-    gap_info = gap_info.select("gap_start", "gap_end", "gap_samples")
+    gap_info = gap_info.select(["Channel", "gap_start", "gap_end", "gap_samples"])
 
-    # Create gap rows for ALL channels to ensure equal sample counts
+    # Create gap rows for each channel to ensure all channels get the same number of samples
     # TimeDomainData will be None, and the existing code will fill it with zeros
     all_channels = dataframe.get_column("Channel").unique().to_list()
     gap_rows = []
     for gap_idx, row in enumerate(gap_info.iter_rows(named=True)):
         gap_times = list(range(row["gap_start"], row["gap_end"] + 1, 4))
-        for ch_idx, channel in enumerate(all_channels):
-            gap_rows.append({
-                "GlobalSequences": -10000 - gap_idx * 100 - ch_idx,  # Unique negative sequence numbers
-                "GlobalPacketSizes": None,
-                "TicksInMses": None,
-                "Channel": channel,
-                "Gain": None,
-                "FirstPacketDateTime": None,
-                "PacketStartIndex": None,
-                "TimeDomainData": None,
-                "PacketTimeMs": None,
-                "BlockTimeMs": None,
-                "GlobalPacketSizesInterpolated": int(row["gap_samples"]),
-                "BlockTimeInterpolatedMs": gap_times,
-                "block_id": None,
-            })
+        channel = row["Channel"]
+        gap_rows.append({
+            "GlobalSequences": -10000 - gap_idx * 100,  # Unique negative sequence numbers
+            "GlobalPacketSizes": None,
+            "TicksInMses": None,
+            "Channel": channel,
+            "Gain": None,
+            "FirstPacketDateTime": None,
+            "PacketStartIndex": None,
+            "TimeDomainData": None,
+            "PacketTimeMs": None,
+            "BlockTimeMs": None,
+            "GlobalPacketSizesInterpolated": int(row["gap_samples"]),
+            "BlockTimeInterpolatedMs": gap_times,
+            "block_id": None,
+        })
 
     if gap_rows:
         gap_df = pl.DataFrame(gap_rows)
@@ -179,23 +181,33 @@ def convert_BrainSenseTimeDomain_to_mne(
 
     logger.debug(missing_data_ms)
 
-    # because mne assumpes an unbroken timeline, we set missing data to value=0
+    # because mne assumes an unbroken timeline, we set missing data to value=0
     # and then set an Annotation for the period
-    data = (
-        dataframe.with_columns(
-            pl.when(pl.col("GlobalPacketSizes").is_null())
-            .then(
-                pl.col("GlobalPacketSizesInterpolated").map_elements(lambda n: [0] * n)
-            )
-            .otherwise(pl.col("TimeDomainData"))
-            .alias("TimeDomainData")
+    # Use BlockTimeInterpolatedMs for alignment across channels to handle
+    # cases where different channels have the same block_id but different time ranges
+    dataframe = dataframe.with_columns(
+        pl.when(pl.col("GlobalPacketSizes").is_null())
+        .then(
+            pl.col("GlobalPacketSizesInterpolated").map_elements(lambda n: [0] * n)
         )
-        .select(["GlobalSequences", "Channel", "TimeDomainData"])
-        .pivot("Channel", values="TimeDomainData")
-        .explode(pl.exclude("GlobalSequences"))
-        .select(pl.exclude("GlobalSequences"))
-        # .explode("TimeDomainData")
+        .otherwise(pl.col("TimeDomainData"))
+        .alias("TimeDomainData")
     )
+
+    # Explode BlockTimeInterpolatedMs and TimeDomainData
+    data = (
+        dataframe.select(["Channel", "BlockTimeInterpolatedMs", "TimeDomainData"])
+        .explode("BlockTimeInterpolatedMs", "TimeDomainData")
+        .pivot("Channel", values="TimeDomainData")
+    )
+
+    # Fill nulls with 0 for missing data
+    for col in data.columns:
+        if col != "BlockTimeInterpolatedMs":
+            data = data.with_columns(pl.col(col).fill_null(0))
+
+    # Sort by BlockTimeInterpolatedMs and select only channel columns
+    data = data.sort("BlockTimeInterpolatedMs").select(pl.exclude("BlockTimeInterpolatedMs"))
 
     logger.debug(data)
 

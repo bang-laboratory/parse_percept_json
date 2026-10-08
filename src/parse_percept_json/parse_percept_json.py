@@ -100,6 +100,66 @@ def convert_BrainSenseTimeDomain_to_mne(
     ms_per_sample = 1000 / sfreq
     start_time = dataframe.get_column("BlockTimeInterpolatedMs").explode().min()
 
+    # Identify and add gap rows for missing time between blocks
+    # Get block boundaries sorted by time
+    block_boundaries = (
+        dataframe.group_by("block_id")
+        .agg(
+            pl.col("BlockTimeInterpolatedMs").explode().min().alias("block_start"),
+            pl.col("BlockTimeInterpolatedMs").explode().max().alias("block_end"),
+            pl.col("Channel").first().alias("channel"),
+            pl.col("Gain").first().alias("gain"),
+        )
+        .sort("block_start")
+    )
+
+    # Calculate gaps between consecutive blocks - need separate steps for polars
+    gap_info = block_boundaries.with_columns(
+        prev_end=pl.col("block_end").shift(1),
+        prev_channel=pl.col("channel").shift(1),
+        prev_gain=pl.col("gain").shift(1),
+    )
+    gap_info = gap_info.filter(pl.col("block_start") > pl.col("prev_end") + 4)
+    gap_info = gap_info.with_columns(
+        gap_start=pl.col("prev_end") + 4,
+    )
+    gap_info = gap_info.with_columns(
+        gap_end=pl.col("block_start") - 4,
+    )
+    gap_info = gap_info.with_columns(
+        gap_samples=((pl.col("gap_end") - pl.col("gap_start")) / 4 + 1).cast(pl.Int64),
+    )
+    gap_info = gap_info.select("prev_channel", "prev_gain", "gap_start", "gap_end", "gap_samples")
+
+    # Create gap rows with unique GlobalSequences
+    # TimeDomainData will be None, and the existing code will fill it with zeros
+    gap_rows = []
+    for i, row in enumerate(gap_info.iter_rows(named=True)):
+        gap_times = list(range(row["gap_start"], row["gap_end"] + 1, 4))
+        gap_rows.append({
+            "GlobalSequences": -10000 - i,  # Unique negative sequence numbers
+            "GlobalPacketSizes": None,
+            "TicksInMses": None,
+            "Channel": row["prev_channel"],
+            "Gain": int(row["prev_gain"]),
+            "FirstPacketDateTime": None,
+            "PacketStartIndex": None,
+            "TimeDomainData": None,
+            "PacketTimeMs": None,
+            "BlockTimeMs": None,
+            "GlobalPacketSizesInterpolated": int(row["gap_samples"]),
+            "BlockTimeInterpolatedMs": gap_times,
+            "block_id": None,
+        })
+
+    if gap_rows:
+        gap_df = pl.DataFrame(gap_rows)
+        # Ensure all columns match the original schema
+        for col in dataframe.columns:
+            if col in gap_df.columns:
+                gap_df = gap_df.with_columns(pl.col(col).cast(dataframe[col].dtype))
+        dataframe = pl.concat([dataframe, gap_df])
+
     missing_data_ms = (
         dataframe.filter(pl.col("GlobalPacketSizes").is_null())
         .unique("BlockTimeInterpolatedMs")

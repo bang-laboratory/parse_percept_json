@@ -136,21 +136,24 @@ def convert_BrainSenseTimeDomain_to_mne(
     for gap_idx, row in enumerate(gap_info.iter_rows(named=True)):
         gap_times = list(range(row["gap_start"], row["gap_end"] + 1, 4))
         channel = row["Channel"]
-        gap_rows.append({
-            "GlobalSequences": -10000 - gap_idx * 100,  # Unique negative sequence numbers
-            "GlobalPacketSizes": None,
-            "TicksInMses": None,
-            "Channel": channel,
-            "Gain": None,
-            "FirstPacketDateTime": None,
-            "PacketStartIndex": None,
-            "TimeDomainData": None,
-            "PacketTimeMs": None,
-            "BlockTimeMs": None,
-            "GlobalPacketSizesInterpolated": int(row["gap_samples"]),
-            "BlockTimeInterpolatedMs": gap_times,
-            "block_id": None,
-        })
+        gap_rows.append(
+            {
+                "GlobalSequences": -10000
+                - gap_idx * 100,  # Unique negative sequence numbers
+                "GlobalPacketSizes": None,
+                "TicksInMses": None,
+                "Channel": channel,
+                "Gain": None,
+                "FirstPacketDateTime": None,
+                "PacketStartIndex": None,
+                "TimeDomainData": None,
+                "PacketTimeMs": None,
+                "BlockTimeMs": None,
+                "GlobalPacketSizesInterpolated": int(row["gap_samples"]),
+                "BlockTimeInterpolatedMs": gap_times,
+                "block_id": None,
+            }
+        )
 
     if gap_rows:
         gap_df = pl.DataFrame(gap_rows)
@@ -187,9 +190,7 @@ def convert_BrainSenseTimeDomain_to_mne(
     # cases where different channels have the same block_id but different time ranges
     dataframe = dataframe.with_columns(
         pl.when(pl.col("GlobalPacketSizes").is_null())
-        .then(
-            pl.col("GlobalPacketSizesInterpolated").map_elements(lambda n: [0] * n)
-        )
+        .then(pl.col("GlobalPacketSizesInterpolated").map_elements(lambda n: [0] * n))
         .otherwise(pl.col("TimeDomainData"))
         .alias("TimeDomainData")
     )
@@ -207,7 +208,9 @@ def convert_BrainSenseTimeDomain_to_mne(
             data = data.with_columns(pl.col(col).fill_null(0))
 
     # Sort by BlockTimeInterpolatedMs and select only channel columns
-    data = data.sort("BlockTimeInterpolatedMs").select(pl.exclude("BlockTimeInterpolatedMs"))
+    data = data.sort("BlockTimeInterpolatedMs").select(
+        pl.exclude("BlockTimeInterpolatedMs")
+    )
 
     logger.debug(data)
 

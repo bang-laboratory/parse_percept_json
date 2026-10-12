@@ -163,7 +163,9 @@ def test_detected_missing_packets_match_interpolated_samples():
 
         missing_rows = df.filter(pl.col("GlobalPacketSizes").is_null())
 
-        packet_sizes = missing_rows["GlobalPacketSizesInterpolated"].fill_null(0).to_list()
+        packet_sizes = (
+            missing_rows["GlobalPacketSizesInterpolated"].fill_null(0).to_list()
+        )
 
         inserted_samples = (
             missing_rows.explode("TimeDomainData")

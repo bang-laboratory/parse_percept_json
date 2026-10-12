@@ -573,6 +573,62 @@ def import_LfpTrendLogs(filename: pathlib.Path, tz: str = "UTC") -> pl.DataFrame
         return None
 
 
+def import_BrainSenseLfp(
+    filename: pathlib.Path, tz: str = "UTC"
+) -> pl.DataFrame | None:
+    json_data = read_file(filename)
+    # print(json_data["BrainSenseLfp"][0]["LfpData"][0])
+    # assert False
+    if (
+        "BrainSenseLfp" in json_data
+        and len(json_data["BrainSenseLfp"]) > 0
+        and "LfpData" in json_data["BrainSenseLfp"][0]
+        and len(json_data["BrainSenseLfp"][0]["LfpData"]) > 0
+    ):
+        df = pl.concat(
+            (
+                pl.from_dict(
+                    package,
+                    schema={
+                        "Seq": pl.Int64,
+                        "TicksInMs": pl.Int64,
+                        "StatusBytes": pl.String,
+                        "Right": pl.Struct({"LFP": pl.Float64, "mA": pl.Float64}),
+                        "Left": pl.Struct,
+                    },
+                ).with_columns(
+                    pl.lit(i).alias("block_id"),
+                    pl.lit(block["FirstPacketDateTime"])
+                    .str.to_datetime(time_zone=tz)
+                    .alias("FirstPacketDateTime"),
+                    pl.lit(block["Channel"]).alias("Channel"),
+                )
+                # .with_columns(
+                #     (
+                #         (pl.col("TicksInMs") - pl.col("TicksInMs").min())
+                #         + pl.col("FirstPacketDateTime")
+                #     ).alias("BlockTimeMs")
+                # )
+                for i, block in enumerate(json_data["BrainSenseLfp"])
+                for package in block["LfpData"]
+            ),
+            how="vertical_relaxed",
+        )
+
+        df = df.select(
+            pl.exclude("Left", "Right"),
+            pl.when(pl.col("Channel").str.contains("LEFT", literal=True))
+            .then(pl.col("Left"))
+            .otherwise(pl.col("Right"))
+            .struct.unnest(),
+            # .alias("Data"),
+        )
+        return df
+    else:
+        logger.warning("BrainSenseLfp not found")
+        return None
+
+
 def import_LfpFrequencySnapshotEvents(
     filename: pathlib.Path,  # , tz: str = "UTC"
 ) -> pl.DataFrame | None:

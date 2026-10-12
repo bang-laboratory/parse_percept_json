@@ -12,6 +12,7 @@ from src.parse_percept_json.parse_percept_json import (
     import_BrainSenseTimeDomain_df,
     import_LfpFrequencySnapshotEvents,
     import_LfpTrendLogs,
+    import_BrainSenseLfp,
     read_file,
     reformat_BrainSenseTimeDomain_channelname,
 )
@@ -174,3 +175,9 @@ def test_detected_missing_packets_match_interpolated_samples():
         )
 
         assert inserted_samples == sum(packet_sizes)
+
+
+def test_BrainSenseLfp():
+    for testfile in testfiles:
+        df = import_BrainSenseLfp(testfile)
+        assert df is not None

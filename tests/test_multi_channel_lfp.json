@@ -1,0 +1,268 @@
+{
+	"PatientInformation": {
+		"Initial": {
+			"PatientLastName": "",
+			"PatientFirstName": "",
+			"PatientId": "",
+			"PatientDateOfBirth": "",
+			"PatientGender": "",
+			"Diagnosis": ""
+		},
+		"Final": {
+			"PatientLastName": "",
+			"PatientFirstName": "",
+			"PatientId": "",
+			"PatientDateOfBirth": "",
+			"PatientGender": "",
+			"Diagnosis": ""
+		}
+	},
+	"DeviceInformation": {
+		"Final": {
+			"NeurostimulatorSerialNumber": ""
+		}
+	},
+	"BrainSenseLfp": [
+		{
+			"Channel": "ONE_THREE_LEFT,ZERO_TWO_RIGHT",
+			"FirstPacketDateTime": "2026-02-24T08:38:25.000Z",
+			"FirstPacketDateTimeBlockId": 53,
+			"FirstPacketDateTimeOffsetInSeconds": 34477378,
+			"SampleRateInHz": 2,
+			"LfpData": [
+				{
+					"Seq": 1249,
+					"TicksInMs": 1972750,
+					"StatusBytes": "00 00 00 00",
+					"Right": {
+						"LFP": 436,
+						"mA": 1.1,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					},
+					"Left": {
+						"LFP": 521,
+						"mA": 2.4,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					}
+				},
+				{
+					"Seq": 1249,
+					"TicksInMs": 1973250,
+					"StatusBytes": "00 00 00 00",
+					"Right": {
+						"LFP": 952,
+						"mA": 1.1,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					},
+					"Left": {
+						"LFP": 475,
+						"mA": 2.4,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					}
+				},
+				{
+					"Seq": 1254,
+					"TicksInMs": 1973750,
+					"StatusBytes": "00 00 00 00",
+					"Right": {
+						"LFP": 952,
+						"mA": 1.1,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					},
+					"Left": {
+						"LFP": 475,
+						"mA": 2.4,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					}
+				},
+				{
+					"Seq": 1254,
+					"TicksInMs": 1974250,
+					"StatusBytes": "00 00 00 00",
+					"Right": {
+						"LFP": 952,
+						"mA": 1.1,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					},
+					"Left": {
+						"LFP": 475,
+						"mA": 2.4,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					}
+				},
+				{
+					"Seq": 1259,
+					"TicksInMs": 1974750,
+					"StatusBytes": "00 00 00 00",
+					"Right": {
+						"LFP": 952,
+						"mA": 1.1,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					},
+					"Left": {
+						"LFP": 475,
+						"mA": 2.4,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					}
+				},
+				{
+					"Seq": 1259,
+					"TicksInMs": 1975250,
+					"StatusBytes": "00 00 00 00",
+					"Right": {
+						"LFP": 952,
+						"mA": 1.1,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					},
+					"Left": {
+						"LFP": 475,
+						"mA": 2.4,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					}
+				},
+				{
+					"Seq": 1264,
+					"TicksInMs": 1975750,
+					"StatusBytes": "00 00 00 00",
+					"Right": {
+						"LFP": 952,
+						"mA": 1.1,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					},
+					"Left": {
+						"LFP": 475,
+						"mA": 2.4,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					}
+				},
+				{
+					"Seq": 1264,
+					"TicksInMs": 1976250,
+					"StatusBytes": "00 00 00 00",
+					"Right": {
+						"LFP": 649,
+						"mA": 1.1,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					},
+					"Left": {
+						"LFP": 464,
+						"mA": 2.4,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					}
+				},
+				{
+					"Seq": 1269,
+					"TicksInMs": 1976750,
+					"StatusBytes": "00 00 00 00",
+					"Right": {
+						"LFP": 649,
+						"mA": 1.1,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					},
+					"Left": {
+						"LFP": 464,
+						"mA": 2.4,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					}
+				},
+				{
+					"Seq": 1269,
+					"TicksInMs": 1977250,
+					"StatusBytes": "00 00 00 00",
+					"Right": {
+						"LFP": 649,
+						"mA": 1.1,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					},
+					"Left": {
+						"LFP": 464,
+						"mA": 2.4,
+						"UpperThreshold": 30,
+						"LowerThreshold": 20
+					}
+				}
+			]
+		}
+	],
+	"BrainSenseTimeDomain": [
+		{
+			"Channel": "ONE_THREE_LEFT",
+			"FirstPacketDateTime": "2026-02-24T08:38:25.000Z",
+			"FirstPacketDateTimeBlockId": 52,
+			"FirstPacketDateTimeOffsetInSeconds": 34477378,
+			"SampleRateInHz": 250,
+			"TimeDomainData": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+			"GlobalSequences": "1249,1250,1251,1252,1253",
+			"GlobalPacketSizes": "250,250,250,250,250",
+			"TicksInMses": "1972750,1973000,1973250,1973500,1973750",
+			"Gain": 1
+		},
+		{
+			"Channel": "ONE_THREE_LEFT",
+			"FirstPacketDateTime": "2026-02-24T08:38:25.000Z",
+			"FirstPacketDateTimeBlockId": 52,
+			"FirstPacketDateTimeOffsetInSeconds": 34477378,
+			"SampleRateInHz": 250,
+			"TimeDomainData": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+			"GlobalSequences": "1254,1255,1256,1257,1258",
+			"GlobalPacketSizes": "250,250,250,250,250",
+			"TicksInMses": "1973750,1974000,1974250,1974500,1974750",
+			"Gain": 1
+		},
+		{
+			"Channel": "ONE_THREE_LEFT",
+			"FirstPacketDateTime": "2026-02-24T08:38:25.000Z",
+			"FirstPacketDateTimeBlockId": 52,
+			"FirstPacketDateTimeOffsetInSeconds": 34477378,
+			"SampleRateInHz": 250,
+			"TimeDomainData": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+			"GlobalSequences": "1259,1260,1261,1262,1263",
+			"GlobalPacketSizes": "250,250,250,250,250",
+			"TicksInMses": "1974750,1975000,1975250,1975500,1975750",
+			"Gain": 1
+		},
+		{
+			"Channel": "ONE_THREE_LEFT",
+			"FirstPacketDateTime": "2026-02-24T08:38:25.000Z",
+			"FirstPacketDateTimeBlockId": 52,
+			"FirstPacketDateTimeOffsetInSeconds": 34477378,
+			"SampleRateInHz": 250,
+			"TimeDomainData": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+			"GlobalSequences": "1264,1265,1266,1267,1268",
+			"GlobalPacketSizes": "250,250,250,250,250",
+			"TicksInMses": "1975750,1976000,1976250,1976500,1976750",
+			"Gain": 1
+		},
+		{
+			"Channel": "ONE_THREE_LEFT",
+			"FirstPacketDateTime": "2026-02-24T08:38:25.000Z",
+			"FirstPacketDateTimeBlockId": 52,
+			"FirstPacketDateTimeOffsetInSeconds": 34477378,
+			"SampleRateInHz": 250,
+			"TimeDomainData": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+			"GlobalSequences": "1269,1270,1271,1272,1273",
+			"GlobalPacketSizes": "250,250,250,250,250",
+			"TicksInMses": "1976750,1977000,1977250,1977500,1977750",
+			"Gain": 1
+		}
+	]
+}

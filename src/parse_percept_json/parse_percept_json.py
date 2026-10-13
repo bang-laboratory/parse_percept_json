@@ -924,6 +924,7 @@ def _process_BrainSenseLfpBlock(
             pl.lit(None).cast(pl.Float64).alias("mA"),
             pl.lit(first_packet_datetime).alias("FirstPacketDateTime"),
             pl.lit(float(sample_rate)).alias("SampleRateInHz"),
+            pl.lit(block_id).alias("block_id"),
         )
         
         # Concatenate with original data

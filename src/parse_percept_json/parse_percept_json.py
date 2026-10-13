@@ -123,10 +123,10 @@ def convert_BrainSenseTimeDomain_to_mne(
     )
     gap_info = gap_info.filter(pl.col("block_start") > pl.col("prev_end") + ms_per_sample)
     gap_info = gap_info.with_columns(
-        gap_start=pl.col("prev_end") + ms_per_sample,
+        gap_start=(pl.col("prev_end") + ms_per_sample).cast(pl.Int64),
     )
     gap_info = gap_info.with_columns(
-        gap_end=pl.col("block_start") - ms_per_sample,
+        gap_end=(pl.col("block_start") - ms_per_sample).cast(pl.Int64),
     )
     gap_info = gap_info.with_columns(
         gap_samples=((pl.col("gap_end") - pl.col("gap_start")) / ms_per_sample + 1).cast(pl.Int64),

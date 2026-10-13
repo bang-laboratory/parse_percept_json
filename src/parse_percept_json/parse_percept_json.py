@@ -927,6 +927,9 @@ def _process_BrainSenseLfpBlock(
             pl.lit(block_id).alias("block_id"),
         )
         
+        # Reorder columns to match data_frame
+        missing_df = missing_df.select(data_frame.columns)
+        
         # Concatenate with original data
         data_frame = pl.concat([data_frame, missing_df])
 

@@ -760,8 +760,7 @@ def _get_TimeDomainData_sequences(data: dict, filename) -> Set | None:
                     # Parse string representation of list using vanilla python
                     # Remove brackets and split by commas
                     seq_str = seq_str.strip("[]")
-                    seq_list = [s.strip() for s in seq_str.split(",") if s.strip()]
-                    sequences.update(int(s) for s in seq_list)
+                    sequences.update(int(s) for s in (x.strip() for x in seq_str.split(",")) if s)
                 elif isinstance(seq_str, list):
                     sequences.update(seq_str)
         return sequences
@@ -930,8 +929,8 @@ def _process_BrainSenseLfpBlock(
         # Concatenate with original data
         data_frame = pl.concat([data_frame, missing_df])
 
-    # Sort by Seq (block_id already added at the top)
-    data_frame = data_frame.sort("Seq")
+    # Sort by TicksInMs (time order), then by Seq
+    data_frame = data_frame.sort("TicksInMs")
     
     return data_frame
 

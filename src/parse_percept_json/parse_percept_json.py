@@ -11,6 +11,7 @@ from typing import Collection, Optional, Set
 
 import matplotlib.pyplot as plt
 import mne
+import numpy as np
 import polars as pl
 import polars.selectors as cs
 
@@ -229,6 +230,170 @@ def convert_BrainSenseTimeDomain_to_mne(
         "'Missing LFP packet'."
     )
     raw = mne.io.RawArray(data.transpose(), info)
+    raw.set_annotations(annots)
+    return raw
+
+
+def convert_BrainSenseLfp_to_mne(
+    dataframe: pl.DataFrame,
+    ch_names: Optional[list[str]] = None,
+    sfreq: Optional[float] = None,
+    ch_types: str = "eeg",
+) -> mne.io.RawArray:
+    """Convert polars dataframe representation of BrainSenseLfp data to mne RawArray.
+
+    Since BrainSenseLfp data is at 2Hz (one sample per packet), and each packet
+    already has a timestamp (TicksInMs with 250ms resolution), we use the
+    TicksInMs values directly to construct the timeline.
+
+    Missing packets are represented as null rows in the dataframe and will be
+    interpolated with 0s in the output, with annotations marking the missing periods.
+
+    Parameters
+    ----------
+    dataframe : pl.DataFrame
+        DataFrame from import_BrainSenseLfp
+    ch_names : list[str] | None
+        Channel names for MNE. If None, derived from Channel column.
+    sfreq : float | None
+        Sampling frequency. If None, derived from SampleRateInHz column.
+    ch_types : str
+        Channel type for MNE (default: "eeg")
+
+    Returns
+    -------
+    mne.io.RawArray
+        MNE RawArray with LFP data
+    """
+    if ch_names is None:
+        # get channel names from data
+        ch_names = sorted(dataframe.get_column("Channel").unique().to_list())
+
+    # Get sample rate from data if not provided
+    if sfreq is None:
+        sample_rates = dataframe["SampleRateInHz"].unique().to_list()
+        if len(sample_rates) > 0:
+            sfreq = sample_rates[0]
+        else:
+            sfreq = 2  # Default to 2Hz for BrainSenseLfp
+
+    # Get the start time (minimum TicksInMs)
+    start_time_ms = dataframe["TicksInMs"].min()
+
+    # Build annotations for missing data
+    # Missing packets have null TicksInMs (since we can't interpolate them reliably)
+    # We'll identify contiguous blocks of missing packets based on Seq
+    missing_data = dataframe.filter(pl.col("LFP").is_null())
+    
+    annotations_list = []
+    if missing_data.height > 0:
+        # Sort by Seq
+        missing_sorted = missing_data.sort("Seq")
+        missing_seqs = missing_sorted["Seq"].to_list()
+        
+        # Find contiguous groups
+        contiguous_groups = []
+        if len(missing_seqs) > 0:
+            current_group = [missing_seqs[0]]
+            for seq in missing_seqs[1:]:
+                if seq - current_group[-1] == 1:
+                    current_group.append(seq)
+                else:
+                    contiguous_groups.append(current_group)
+                    current_group = [seq]
+            contiguous_groups.append(current_group)
+        
+        # For each contiguous group, find the time range
+        for group in contiguous_groups:
+            min_seq = min(group)
+            max_seq = max(group)
+            
+            # Find the packets immediately before and after this gap
+            prev_packet = dataframe.filter(
+                (pl.col("Seq") < min_seq) 
+                & (pl.col("LFP").is_not_null())
+            ).sort("Seq", descending=True)
+            
+            next_packet = dataframe.filter(
+                (pl.col("Seq") > max_seq) 
+                & (pl.col("LFP").is_not_null())
+            ).sort("Seq")
+            
+            if prev_packet.height > 0 and next_packet.height > 0:
+                prev_ticks = prev_packet["TicksInMs"].max()
+                next_ticks = next_packet["TicksInMs"].min()
+                
+                # Estimate the time range
+                # At 2Hz, each sample is 500ms apart
+                # But TicksInMs has 250ms resolution
+                gap_start_ms = float(prev_ticks) + 250  # Half step
+                gap_end_ms = float(next_ticks) - 250  # Half step
+                gap_duration_ms = gap_end_ms - gap_start_ms
+                
+                if gap_duration_ms > 0:
+                    annotations_list.append({
+                        "onset": (gap_start_ms - float(start_time_ms)) / 1000,
+                        "duration": gap_duration_ms / 1000,
+                        "description": "Missing LFP packet",
+                    })
+    
+    annots = mne.Annotations(
+        onset=[a["onset"] for a in annotations_list],
+        duration=[a["duration"] for a in annotations_list],
+        description=[a["description"] for a in annotations_list],
+    )
+
+    # Build the data matrix
+    # Use TicksInMs as the timeline, fill missing with interpolated values
+    # First, create a complete timeline based on all unique TicksInMs values
+    # For each channel, we need to create a time series
+    
+    # Get all channels
+    channels = sorted(dataframe["Channel"].unique().to_list())
+    
+    # For each channel, create a time series
+    channel_data = {}
+    for channel in channels:
+        channel_df = dataframe.filter(pl.col("Channel") == channel)
+        
+        # Sort by TicksInMs
+        channel_df = channel_df.sort("TicksInMs")
+        
+        # Get all TicksInMs values (including from other channels for alignment)
+        all_ticks = sorted(dataframe["TicksInMs"].drop_nulls().unique().to_list())
+        
+        # Create a mapping from TicksInMs to LFP value for this channel
+        ticks_to_lfp = {}
+        for row in channel_df.iter_rows(named=True):
+            ticks = row["TicksInMs"]
+            if ticks is not None:
+                ticks_to_lfp[ticks] = row["LFP"]
+        
+        # Build time series for this channel
+        time_series = []
+        for ticks in all_ticks:
+            lfp = ticks_to_lfp.get(ticks, None)
+            if lfp is None:
+                # Try to find closest value
+                # For simplicity, fill with 0 for now
+                time_series.append(0.0)
+            else:
+                time_series.append(float(lfp))
+        
+        channel_data[channel] = time_series
+    
+    # Create data matrix
+    data_matrix = np.array([channel_data[ch] for ch in ch_names])
+    
+    # Create MNE info and RawArray
+    info = mne.create_info(ch_names=ch_names, ch_types=ch_types, sfreq=sfreq)
+    info["description"] = (
+        "Missing packets replaced with 0. "
+        "Consult annotations labelled "
+        "'Missing LFP packet'."
+    )
+    
+    raw = mne.io.RawArray(data_matrix, info)
     raw.set_annotations(annots)
     return raw
 
@@ -529,6 +694,166 @@ def _get_LfpData_sequences(data: dict, filename) -> Set | None:
         return None
 
 
+def _process_BrainSenseLfpBlock(
+    raw_data: dict,
+    known_accounted_for_packets: Collection[int] | None = None,
+    block_id: int = 0,
+) -> pl.DataFrame:
+    """Process a single BrainSenseLfp block to extract LfpData with missing packet detection.
+
+    These data files can contain multiple blocks that are not guaranteed to
+    be continuous. Each LfpData packet contains one sample per channel (Left/Right).
+
+    Note: The LfpData entries appear to have duplicate Seq values with different
+    TicksInMs. This suggests each Seq represents a "packet" that can contain multiple
+    samples (one per hemisphere). We keep all entries and detect missing Seq values.
+
+    Input: a dict containing one block of BrainSenseLfp data
+    Output: A polars dataframe with one row per LfpData entry
+
+    known_accounted_for_packets: the packets that are accounted for in other
+    parts of the data and thus should not be considered missing
+
+    """
+    if known_accounted_for_packets is None:
+        known_accounted_for_packets = set()
+    else:
+        known_accounted_for_packets = set(known_accounted_for_packets)
+
+    sample_rate = raw_data.get("SampleRateInHz", 2)
+    block_channel = raw_data.get("Channel", "")
+    first_packet_datetime = raw_data.get("FirstPacketDateTime", "")
+
+    # Extract LfpData entries
+    lfp_data = raw_data.get("LfpData", [])
+    if len(lfp_data) == 0:
+        return pl.DataFrame()
+
+    # Build dataframe from LfpData
+    rows = []
+    for entry in lfp_data:
+        seq = entry["Seq"]
+        ticks_in_ms = entry["TicksInMs"]
+        status_bytes = entry["StatusBytes"]
+        left_data = entry.get("Left", {})
+        right_data = entry.get("Right", {})
+
+        # Determine which channel's data to use based on block Channel field
+        if "LEFT" in block_channel:
+            lfp_value = left_data.get("LFP", None)
+            ma_value = left_data.get("mA", None)
+        elif "RIGHT" in block_channel:
+            lfp_value = right_data.get("LFP", None)
+            ma_value = right_data.get("mA", None)
+        else:
+            # If channel is not specified, we need to handle both
+            # For now, prefer Left if it has data, otherwise Right
+            if left_data.get("LFP", 0) != 0 or left_data.get("mA", 0) != 0:
+                lfp_value = left_data.get("LFP", None)
+                ma_value = left_data.get("mA", None)
+            else:
+                lfp_value = right_data.get("LFP", None)
+                ma_value = right_data.get("mA", None)
+
+        rows.append(
+            {
+                "Seq": seq,
+                "TicksInMs": ticks_in_ms,
+                "StatusBytes": status_bytes,
+                "LFP": float(lfp_value) if lfp_value is not None else None,
+                "mA": float(ma_value) if ma_value is not None else None,
+            }
+        )
+
+    # Create DataFrame with explicit types
+    data_frame = pl.DataFrame({
+        "Seq": pl.Series([r["Seq"] for r in rows], dtype=pl.Int64),
+        "TicksInMs": pl.Series([r["TicksInMs"] for r in rows], dtype=pl.Int64),
+        "StatusBytes": pl.Series([r["StatusBytes"] for r in rows], dtype=pl.String),
+        "LFP": pl.Series([r["LFP"] for r in rows], dtype=pl.Float64),
+        "mA": pl.Series([r["mA"] for r in rows], dtype=pl.Float64),
+        "Channel": pl.Series([block_channel] * len(rows), dtype=pl.String),
+        "FirstPacketDateTime": pl.Series([first_packet_datetime] * len(rows), dtype=pl.String),
+        "SampleRateInHz": pl.Series([float(sample_rate)] * len(rows), dtype=pl.Float64),
+    })
+
+    # Check for missing packets based on Seq values
+    # Note: In BrainSenseLfp, each Seq can have multiple entries (for different hemispheres)
+    # We check for gaps in the sequence numbers
+    all_seqs = data_frame["Seq"].to_list()
+    packets_found: set[int] = set(all_seqs)
+
+    MODULO = 2**16  # Seq is a 16 bit integer
+    HALF_RANGE = MODULO // 2
+    packets_missing: set[int] = set()
+
+    sorted_seqs = sorted(packets_found)
+
+    for prev, curr in zip(sorted_seqs[:-1], sorted_seqs[1:]):
+        delta = (curr - prev) % MODULO  # handle integer overflows in Seq
+
+        if delta == 1:
+            continue
+
+        if 1 < delta <= HALF_RANGE:
+            # Missing packets
+            for seq in range(1, delta):
+                packets_missing.add((prev + seq) % MODULO)
+        elif delta == 0:
+            # This can happen if we have duplicate Seq values (multiple entries per Seq)
+            # This is expected for BrainSenseLfp, so don't log as error
+            continue
+        else:
+            # delta > 32768
+            logger.warning(
+                f"Ignoring backwards sequence jump: prev={prev}, curr={curr}, delta={delta}"
+            )
+
+    packets_missing -= known_accounted_for_packets
+
+    if len(packets_missing) == 0:
+        logger.info(f"Missing Packets: 0")
+    else:
+        logger.warning(
+            f"Missing Packets ({len(packets_missing)}): {sorted(packets_missing)}"
+        )
+
+    # Explicitly represent missing packets as null rows
+    # For missing packets, we create one row per missing Seq with null values
+    if len(packets_missing) > 0:
+        channels_found_this_block = data_frame["Channel"].unique().to_list()
+        missing_rows = []
+        for seq in sorted(packets_missing):
+            for channel in channels_found_this_block:
+                missing_rows.append({
+                    "Seq": seq,
+                    "TicksInMs": None,
+                    "StatusBytes": None,
+                    "LFP": None,
+                    "mA": None,
+                    "Channel": channel,
+                    "FirstPacketDateTime": first_packet_datetime,
+                    "SampleRateInHz": float(sample_rate) if sample_rate is not None else None,
+                })
+        
+        missing_df = pl.DataFrame({
+            "Seq": pl.Series([r["Seq"] for r in missing_rows], dtype=pl.Int64),
+            "TicksInMs": pl.Series([r["TicksInMs"] for r in missing_rows], dtype=pl.Int64),
+            "StatusBytes": pl.Series([r["StatusBytes"] for r in missing_rows], dtype=pl.String),
+            "LFP": pl.Series([r["LFP"] for r in missing_rows], dtype=pl.Float64),
+            "mA": pl.Series([r["mA"] for r in missing_rows], dtype=pl.Float64),
+            "Channel": pl.Series([r["Channel"] for r in missing_rows], dtype=pl.String),
+            "FirstPacketDateTime": pl.Series([r["FirstPacketDateTime"] for r in missing_rows], dtype=pl.String),
+            "SampleRateInHz": pl.Series([r["SampleRateInHz"] for r in missing_rows], dtype=pl.Float64),
+        })
+        data_frame = pl.concat([data_frame, missing_df])
+
+    # Sort by Seq and add block_id
+    data_frame = data_frame.sort("Seq").with_columns(pl.lit(block_id).alias("block_id"))
+    
+    return data_frame
+
+
 def import_BrainSenseTimeDomain_df(filename: pathlib.Path) -> pl.DataFrame | None:
     """Extract the BrainSenseTimeDomain data from a percept json file"""
     json_data = read_file(filename)
@@ -576,56 +901,66 @@ def import_LfpTrendLogs(filename: pathlib.Path, tz: str = "UTC") -> pl.DataFrame
 def import_BrainSenseLfp(
     filename: pathlib.Path, tz: str = "UTC"
 ) -> pl.DataFrame | None:
+    """Extract the BrainSenseLfp data from a percept json file.
+
+    Returns a polars DataFrame with one row per LfpData packet, with columns:
+    - Seq: Sequence number
+    - TicksInMs: Timestamp in milliseconds
+    - StatusBytes: Status bytes string
+    - LFP: LFP value
+    - mA: Current value in mA
+    - Channel: Channel name
+    - FirstPacketDateTime: First packet datetime for the block
+    - SampleRateInHz: Sample rate in Hz
+    - block_id: Block identifier
+    """
     json_data = read_file(filename)
-    # print(json_data["BrainSenseLfp"][0]["LfpData"][0])
-    # assert False
+
     if (
         "BrainSenseLfp" in json_data
         and len(json_data["BrainSenseLfp"]) > 0
         and "LfpData" in json_data["BrainSenseLfp"][0]
-        and len(json_data["BrainSenseLfp"][0]["LfpData"]) > 0
     ):
-        df = pl.concat(
-            (
-                pl.from_dict(
-                    package,
-                    schema={
-                        "Seq": pl.Int64,
-                        "TicksInMs": pl.Int64,
-                        "StatusBytes": pl.String,
-                        "Right": pl.Struct({"LFP": pl.Float64, "mA": pl.Float64}),
-                        "Left": pl.Struct,
-                    },
-                ).with_columns(
-                    pl.lit(i).alias("block_id"),
-                    pl.lit(block["FirstPacketDateTime"])
-                    .str.to_datetime(time_zone=tz)
-                    .alias("FirstPacketDateTime"),
-                    pl.lit(block["Channel"]).alias("Channel"),
-                )
-                # .with_columns(
-                #     (
-                #         (pl.col("TicksInMs") - pl.col("TicksInMs").min())
-                #         + pl.col("FirstPacketDateTime")
-                #     ).alias("BlockTimeMs")
-                # )
-                for i, block in enumerate(json_data["BrainSenseLfp"])
-                for package in block["LfpData"]
-            ),
-            how="vertical_relaxed",
-        )
+        # Get sequences from TimeDomain data to exclude from missing packet detection
+        time_domain_sequences = _get_LfpData_sequences(json_data, filename.name)
 
-        df = df.select(
-            pl.exclude("Left", "Right"),
-            pl.when(pl.col("Channel").str.contains("LEFT", literal=True))
-            .then(pl.col("Left"))
-            .otherwise(pl.col("Right"))
-            .struct.unnest(),
-            # .alias("Data"),
+        return pl.concat(
+            _process_BrainSenseLfpBlock(
+                block,
+                known_accounted_for_packets=time_domain_sequences,
+                block_id=i,
+            )
+            for i, block in enumerate(json_data["BrainSenseLfp"])
         )
-        return df
     else:
         logger.warning("BrainSenseLfp not found")
+        return None
+
+
+def import_BrainSenseLfp_mne(
+    filename: pathlib.Path, tz: str = "UTC"
+) -> mne.io.RawArray | None:
+    """Extract the BrainSenseLfp data from a percept json file and convert to MNE RawArray.
+
+    This is a convenience function that combines import_BrainSenseLfp and
+    convert_BrainSenseLfp_to_mne.
+
+    Parameters
+    ----------
+    filename : pathlib.Path
+        Path to the JSON file
+    tz : str
+        Timezone for datetime parsing (default: "UTC")
+
+    Returns
+    -------
+    mne.io.RawArray | None
+        MNE RawArray with LFP data, or None if BrainSenseLfp not found
+    """
+    dataframe = import_BrainSenseLfp(filename, tz=tz)
+    if dataframe is not None:
+        return convert_BrainSenseLfp_to_mne(dataframe)
+    else:
         return None
 
 

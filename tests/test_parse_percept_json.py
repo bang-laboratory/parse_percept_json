@@ -4,8 +4,10 @@ import pathlib
 
 import polars as pl
 from src.parse_percept_json.parse_percept_json import (
+    _process_BrainSenseLfpBlock,
     _process_BrainSenseTimeDomainBlock,
     anonymize_data,
+    convert_BrainSenseLfp_to_mne,
     convert_BrainSenseTimeDomain_to_mne,
     forward_fill_nulls_shifted,
     import_BrainSenseTimeDomain,
@@ -13,6 +15,7 @@ from src.parse_percept_json.parse_percept_json import (
     import_LfpFrequencySnapshotEvents,
     import_LfpTrendLogs,
     import_BrainSenseLfp,
+    import_BrainSenseLfp_mne,
     read_file,
     reformat_BrainSenseTimeDomain_channelname,
 )
@@ -181,3 +184,58 @@ def test_BrainSenseLfp():
     for testfile in testfiles:
         df = import_BrainSenseLfp(testfile)
         assert df is not None
+
+
+def test_BrainSenseLfp_columns():
+    for testfile in testfiles:
+        df = import_BrainSenseLfp(testfile)
+        assert df is not None
+        expected_columns = {
+            "Seq",
+            "TicksInMs",
+            "StatusBytes",
+            "LFP",
+            "mA",
+            "Channel",
+            "FirstPacketDateTime",
+            "SampleRateInHz",
+            "block_id",
+        }
+        assert set(df.columns) == expected_columns
+
+
+def test_BrainSenseLfp_missing_packets():
+    for testfile in testfiles:
+        df = import_BrainSenseLfp(testfile)
+        assert df is not None
+        # Check that missing packets are represented as null rows
+        null_lfp = df.filter(pl.col("LFP").is_null())
+        if null_lfp.height > 0:
+            # If there are null LFP values, they should have null TicksInMs too
+            assert null_lfp["TicksInMs"].null_count() == null_lfp.height
+
+
+def test_BrainSenseLfp_sample_rate():
+    for testfile in testfiles:
+        df = import_BrainSenseLfp(testfile)
+        assert df is not None
+        # SampleRateInHz should be consistent (2Hz for BrainSenseLfp)
+        sample_rates = df["SampleRateInHz"].unique().to_list()
+        assert len(sample_rates) > 0
+        assert all(sr == 2.0 for sr in sample_rates)
+
+
+def test_BrainSenseLfp_to_mne():
+    for testfile in testfiles:
+        df = import_BrainSenseLfp(testfile)
+        assert df is not None
+        raw = convert_BrainSenseLfp_to_mne(df)
+        assert raw is not None
+        assert raw.n_times > 0
+
+
+def test_import_BrainSenseLfp_mne():
+    for testfile in testfiles:
+        raw = import_BrainSenseLfp_mne(testfile)
+        assert raw is not None
+        assert raw.n_times > 0

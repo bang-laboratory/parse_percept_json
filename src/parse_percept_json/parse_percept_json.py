@@ -19,8 +19,11 @@ logger = logging.getLogger(__name__)
 
 
 def anonymize_file(file_path: pathlib.Path, prefix: str = "Sensitive_") -> pathlib.Path:
-    """Creates a copy of the file with sensitive data removed, and moves the
-    original file to {prefix}{file_path.name}
+    """Creates an anonymized copy of the file at the original path, and moves the
+    original sensitive file to {prefix}{file_path.name}.
+
+    WARNING: This operation renames the original file on disk. The returned path
+    points to the anonymized version (original filename).
 
     """
     if not file_path.name.startswith("Sensitive_"):
@@ -118,15 +121,15 @@ def convert_BrainSenseTimeDomain_to_mne(
     gap_info = channel_block_boundaries.with_columns(
         prev_end=pl.col("block_end").shift(1).over("Channel"),
     )
-    gap_info = gap_info.filter(pl.col("block_start") > pl.col("prev_end") + 4)
+    gap_info = gap_info.filter(pl.col("block_start") > pl.col("prev_end") + ms_per_sample)
     gap_info = gap_info.with_columns(
-        gap_start=pl.col("prev_end") + 4,
+        gap_start=pl.col("prev_end") + ms_per_sample,
     )
     gap_info = gap_info.with_columns(
-        gap_end=pl.col("block_start") - 4,
+        gap_end=pl.col("block_start") - ms_per_sample,
     )
     gap_info = gap_info.with_columns(
-        gap_samples=((pl.col("gap_end") - pl.col("gap_start")) / 4 + 1).cast(pl.Int64),
+        gap_samples=((pl.col("gap_end") - pl.col("gap_start")) / ms_per_sample + 1).cast(pl.Int64),
     )
     gap_info = gap_info.select(["Channel", "gap_start", "gap_end", "gap_samples"])
 
@@ -135,7 +138,7 @@ def convert_BrainSenseTimeDomain_to_mne(
     all_channels = dataframe.get_column("Channel").unique().to_list()
     gap_rows = []
     for gap_idx, row in enumerate(gap_info.iter_rows(named=True)):
-        gap_times = list(range(row["gap_start"], row["gap_end"] + 1, 4))
+        gap_times = list(range(row["gap_start"], row["gap_end"] + 1, int(ms_per_sample)))
         channel = row["Channel"]
         gap_rows.append(
             {
@@ -644,11 +647,11 @@ def _process_BrainSenseTimeDomainBlock(
     )
     logger.debug(packets_missing)
     if len(packets_missing) > 0:
-        full_sequence = pl.DataFrame(
-            {
-                "GlobalSequences": list(packets_missing),
-                "Channel": channels_found_this_block * len(packets_missing),
-            }
+        # Create cross product of missing sequences and channels to handle
+        # blocks with multiple channels correctly (robustness improvement)
+        full_sequence = pl.DataFrame({"GlobalSequences": sorted(packets_missing)}).join(
+            pl.DataFrame({"Channel": channels_found_this_block}),
+            how="cross"
         )
         #  print(full_sequence)
         data_frame = data_frame.join(

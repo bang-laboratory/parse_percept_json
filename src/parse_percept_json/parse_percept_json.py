@@ -488,6 +488,9 @@ def _calc_BlockTimeMs(
         if i == 0:
             # first packet in block
             start_time = row[col_name_timestamp_start]
+            if start_time is None:
+                # If no timestamp start is available, use the first PacketTimeMs
+                start_time = row[col_name_timestamp_block][0]
         else:
             # subsequent packets in block
             start_time = result[i - 1][-1] + int(ms_per_sample)
@@ -682,14 +685,21 @@ def _process_BrainSenseTimeDomainBlock(
         .alias("TimeDomainData")
     )
 
+    # For BlockTimeInterpolatedMs, we want to create a continuous timeline
+    # that doesn't have overlaps. We do this by always chaining from the
+    # previous packet's end time, rather than using TicksInMses which can
+    # cause overlaps when packets are missing.
+    # We pass None as the timestamp_start column to force chaining behavior.
+    data_frame = data_frame.with_columns(pl.lit(None).alias("_dummy_timestamp"))
     data_frame = _calc_BlockTimeMs(
         data_frame,
         ms_per_sample,
         "BlockTimeInterpolatedMs",
-        "TicksInMses",
+        "_dummy_timestamp",
         "PacketTimeMs",
         "GlobalPacketSizesInterpolated",
     )
+    data_frame = data_frame.drop("_dummy_timestamp")
 
     # Add block_id to the dataframe before returning
     return data_frame.with_columns(pl.lit(block_id).alias("block_id"))

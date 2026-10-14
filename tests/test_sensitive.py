@@ -11,6 +11,7 @@ from src.parse_percept_json.parse_percept_json import (
     anonymize_data,
     convert_BrainSenseTimeDomain_to_mne,
     forward_fill_nulls_shifted,
+    import_BrainSenseLfp,
     import_BrainSenseTimeDomain,
     import_BrainSenseTimeDomain_df,
     import_LfpFrequencySnapshotEvents,
@@ -23,7 +24,7 @@ testfile = Path("tests/Sensitive_Report_Json_Session_Report_20251028T170416.json
 if not testfile.exists():
     pytest.skip("No access to sensitive data file", allow_module_level=True)
 
-expensive = pytest.mark.skipif(True, reason="This test is expensive")
+expensive = pytest.mark.skipif(False, reason="This test is expensive")
 
 
 @expensive
@@ -31,7 +32,7 @@ def test_loading_missing():
 
     data = import_BrainSenseTimeDomain_df(testfile)
     assert data is not None
-    assert data.height == 130148
+    assert data.height == 22370
 
 
 @expensive
@@ -101,8 +102,9 @@ if not sensitive_data_folder.exists():
 
 @expensive
 def test_load_all_lines_data():
-    for f in sensitive_data_folder.glob("*_o*.json"):
-        assert import_BrainSenseTimeDomain_df(f) is not None
+    for f in sensitive_data_folder.glob("*_[bo]*.json"):
+        assert import_BrainSenseTimeDomain(f) is not None
+        assert import_BrainSenseLfp(f) is not None
 
 
 @expensive
@@ -110,5 +112,5 @@ def test_import_BrainSenseTimeDomain():
     data = import_BrainSenseTimeDomain(testfile)
     assert type(data) is mne.io.RawArray, "should return an mne RawArray"
     assert (
-        np.abs(data.duration - 2796.25) < 0.004
+        np.abs(data.duration - 3272.8) < 0.004
     ), "should find the correct number of samples"  # 1 sample = 4 milisecond
